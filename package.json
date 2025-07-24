@@ -4,7 +4,7 @@
   "main": "ZOZACserver.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon ZOZACserver.js.js"
+    "dev": "node ZOZACserver.js"
   },
   "keywords": [],
   "author": "",
