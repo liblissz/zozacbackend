@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Send SMS with TextBee</title>
+</head>
+<body>
+  <h1>Send SMS</h1>
+  <form id="smsForm">
+    <input type="text" id="phone" placeholder="Phone (+countrycode number)" required><br><br>
+    <textarea id="message" placeholder="Your message" required></textarea><br><br>
+    <button type="submit">Send SMS</button>
+  </form>
+
+  <script>
+    document.getElementById("smsForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const phone = document.getElementById("phone").value;
+      const message = document.getElementById("message").value;
+
+      const res = await fetch("/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, message }),
+      });
+
+      const data = await res.json();
+      alert(data.success ? "SMS sent!" : "Failed: " + (data.message || data.error));
+    });
+  </script>
+</body>
+</html>
