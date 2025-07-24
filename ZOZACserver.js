@@ -618,7 +618,15 @@ app.get('/api/profile', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
+app.get("/api/user/add-project/:id", async (req, res) => {
+  try {
+    const user = await Usermodel.findById(req.params.id).select('projects');
+    res.status(200).json(user.projects); // ✅ returns just the array
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 //adding users project
 
 // POST: Add a new project to a user
