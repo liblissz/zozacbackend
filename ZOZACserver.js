@@ -1134,7 +1134,7 @@ app.get('/admin/picture/post', async (req, res) => {
   try {
  const allpicturepost = await pictureModel
   .find()
-  .sort({ createdAt: -1 });
+  .sort({ date: -1 });
 
     res.status(201).json(allpicturepost)
   } catch (error) {
@@ -1313,7 +1313,7 @@ const VideoSchema = mongoose.Schema(
   
   app.get('/admin/video/post', async (req, res) => {
     try {
-      const allvideopost = await VideoModel.find().sort({ createdAt: -1 });
+      const allvideopost = await VideoModel.find().sort({ date: -1 });
       res.status(201).json(allvideopost)
     } catch (error) {
       res.status(500).json({ message: "internal server error" })
@@ -2339,4 +2339,5 @@ connectdatase().then(()=>{
       console.log("🚀 Server + Socket.IO listening at http://localhost:8000");
     });
 })
+
 
