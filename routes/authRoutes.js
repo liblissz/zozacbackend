@@ -104,7 +104,18 @@ router.post('/login', async (req, res) => {
         }
 
         if (user.status === 'pending') {
-            return res.status(403).json({ message: 'Your registration is waiting for administrator approval' });
+            const approvedRequest = await UsernameRequest.findOne({
+                username,
+                email: user.email,
+                status: 'approved',
+            });
+
+            if (approvedRequest) {
+                user.status = 'approved';
+                await user.save();
+            } else {
+                return res.status(403).json({ message: 'Your registration is waiting for administrator approval' });
+            }
         }
         if (user.status === 'rejected') {
             return res.status(403).json({ message: 'Your registration was not approved' });
