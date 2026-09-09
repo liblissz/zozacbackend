@@ -638,6 +638,13 @@ const PictureSchema = mongoose.Schema(
       type: String,
       required: true
     },
+    link: { type: String, default: '' },
+    category: { type: String, default: 'General' },
+    tags: { type: [String], default: [] },
+    status: { type: String, enum: ['draft', 'published'], default: 'published' },
+    featured: { type: Boolean, default: false },
+    publishAt: { type: Date, default: Date.now },
+    views: { type: Number, default: 0 },
     ImageUrl: {
       type: String,
       required: true
@@ -689,10 +696,10 @@ const NotificationModel = mongoose.model('Notification', NotificationSchema);
 //post pictures
 app.post("/admin/picture/post", async (req, res) => {
   try {
-    const { title, content, price, ImageUrl, date } = req.body;
+    const { title, content, price, link, category, tags, status, featured, publishAt, ImageUrl, date } = req.body;
 
     // Save post
-    const savePost = new pictureModel({ title, content, price, ImageUrl, date });
+    const savePost = new pictureModel({ title, content, price, link, category, tags, status, featured, publishAt, ImageUrl, date });
     await savePost.save();
 
     // Notify admins
@@ -961,10 +968,10 @@ app.get('/admin/picture/post', async (req, res) => {
 
 app.patch('/admin/picture/post/:id', async (req, res) => {
   try {
-    const { title, content, price, ImageUrl } = req.body;
+    const { title, content, price, link, category, tags, status, featured, publishAt, ImageUrl } = req.body;
     const post = await pictureModel.findByIdAndUpdate(
       req.params.id,
-      { title, content, price, ...(ImageUrl ? { ImageUrl } : {}) },
+      { title, content, price, link, category, tags, status, featured, publishAt, ...(ImageUrl ? { ImageUrl } : {}) },
       { new: true, runValidators: true }
     );
     if (!post) return res.status(404).json({ message: 'Picture post not found' });
@@ -1001,6 +1008,13 @@ const VideoSchema = mongoose.Schema(
       type: String,
       required: true
     },
+    link: { type: String, default: '' },
+    category: { type: String, default: 'General' },
+    tags: { type: [String], default: [] },
+    status: { type: String, enum: ['draft', 'published'], default: 'published' },
+    featured: { type: Boolean, default: false },
+    publishAt: { type: Date, default: Date.now },
+    views: { type: Number, default: 0 },
     VidUrl: {
       type: String,
       required: true
@@ -1026,9 +1040,9 @@ const VideoSchema = mongoose.Schema(
 const VideoModel = mongoose.model("VideoPosts", VideoSchema)
 app.post("/admin/video/post", async (req, res) => {
   try {
-    const { title, content, price, VidUrl, date } = req.body;
+    const { title, content, price, link, category, tags, status, featured, publishAt, VidUrl, date } = req.body;
 
-    const savePostvideo = new VideoModel({ title, content, price, VidUrl, date });
+    const savePostvideo = new VideoModel({ title, content, price, link, category, tags, status, featured, publishAt, VidUrl, date });
     await savePostvideo.save();
 
     // Notify admins
@@ -1180,10 +1194,10 @@ app.get('/admin/video/post/:id', async (req, res) => {
 
 app.patch('/admin/video/post/:id', async (req, res) => {
   try {
-    const { title, content, price, VidUrl } = req.body;
+    const { title, content, price, link, category, tags, status, featured, publishAt, VidUrl } = req.body;
     const post = await VideoModel.findByIdAndUpdate(
       req.params.id,
-      { title, content, price, ...(VidUrl ? { VidUrl } : {}) },
+      { title, content, price, link, category, tags, status, featured, publishAt, ...(VidUrl ? { VidUrl } : {}) },
       { new: true, runValidators: true }
     );
     if (!post) return res.status(404).json({ message: 'Video post not found' });
