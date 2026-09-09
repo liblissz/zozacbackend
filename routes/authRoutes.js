@@ -80,6 +80,9 @@ router.post('/username-request', async (req, res) => {
             return res.status(409).json({ message: 'That username is already in use' });
         }
         if (existingRequest) {
+            if (existingRequest.email === email) {
+                return res.status(200).json({ message: 'Your username request is already pending approval' });
+            }
             return res.status(409).json({ message: 'A request for that username is already pending' });
         }
 
