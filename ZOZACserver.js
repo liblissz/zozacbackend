@@ -4,6 +4,8 @@ import cors from 'cors';
 import mongoose from "mongoose";
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import User from './models/User.js';
+import authRoutes from './routes/authRoutes.js';
 import Message from './AImodules/aimessages.js'
 import Conversation from "./AImodules/Conversation.js";
 import axios from 'axios'
@@ -50,6 +52,7 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
+app.use('/api/auth', authRoutes);
 
 //connecting to the mongodb database
 //connection string
@@ -72,152 +75,7 @@ const connectdatase =  async()=>{
 
 
 
-//models
-
-
-const projectSchema = new mongoose.Schema({
-  title: String,
-  description: String,
-  completed: Boolean,
-  GithubLink: String,
-  imageUrlwork: String,
-  ratings: [
-    {
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-      },
-      value: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-    }
-  ],
-
-  date: {
-    type: Date,
-    default: Date.now,
-  },
-}, { _id: true });
-
-
-
-
-
-const ZOZACAdminSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  about: { type: String, required: true },
-  number: { type: Number, required: true },
-  password: { type: String, required: true },
-  profileImage: { type: String, required: true },
-  date: {
-    type: String,
-    default: () => new Date().toLocaleString('en-US', {
-      timeZone: 'Africa/Douala',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
-  },
-  projects: [projectSchema]
-});
-const Usermodel = mongoose.model("ZOZAC-ADMINS", ZOZACAdminSchema);
-
-
 const SORT_ROUNDS = 6;
-app.post('/api/signup/admin', async (req, res) => {
-  try {
-    const { username, email, about, number, password, profileImage, date } = req.body;
-
-    const checkemail = await Usermodel.findOne({ email });
-    if (checkemail) {
-      return res.status(400).json({ message: "Email already taken" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, SORT_ROUNDS);
-    const newUser = new Usermodel({
-      username,
-      email,
-      about,
-      number,
-      password: hashedPassword,
-      profileImage,
-      date
-    });
-
-    await newUser.save();
-
-
-
-
-    const token = jwt.sign({ email }, 'auth-token', { expiresIn: '1d' });
-
-    res.status(200).json({
-      message: "User saved successfully",
-      token,
-    });
-
-  } catch (error) {
-    console.error("❌ Signup error:", error);
-    res.status(500).json({ message: "Internal server error" });
-    console.log('====================================');
-    console.log(error);
-    console.log('====================================');
-  }
-});
-
-app.post("/api/login/admin", async (req, res) => {
-  try {
-    const { email, password } = req.body
-
-    const user = await Usermodel.findOne({ email })
-
-    if (!user) {
-      res.status(404).json({ sucess: false, message: "user not found" })
-    } else {
-      const confirmpass = await bcrypt.compare(password, user.password)
-      if (confirmpass) {
-        const token = jwt.sign({ email }, 'auth-token', { expiresIn: '1d' });
-        res.status(200).json({
-          message: "Login successful",
-          sucess: true,
-          token
-        });
-
-      } else {
-        res.status(401).json({ sucess: false, message: "Your Password Is Incorrect" })
-      }
-    }
-  } catch (error) {
-    console.log(error);
-
-  }
-})
-
-
-
-app.get('/api/signup/admin', async (req, res) => {
-  try {
-    const users = await Usermodel.find();
-
-    res.status(200).json(users);
-
-  } catch (error) {
-    console.error("❌ Fetch error:", error);
-    res.status(500).json({ message: "Could not retrieve users" });
-  }
-});
-
-
-
-
-
-
 
 const normaluserschema = mongoose.Schema({
   name: { type: String, required: true },
