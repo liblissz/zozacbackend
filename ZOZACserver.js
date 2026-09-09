@@ -959,6 +959,33 @@ app.get('/admin/picture/post', async (req, res) => {
   }
 })
 
+app.patch('/admin/picture/post/:id', async (req, res) => {
+  try {
+    const { title, content, price, ImageUrl } = req.body;
+    const post = await pictureModel.findByIdAndUpdate(
+      req.params.id,
+      { title, content, price, ...(ImageUrl ? { ImageUrl } : {}) },
+      { new: true, runValidators: true }
+    );
+    if (!post) return res.status(404).json({ message: 'Picture post not found' });
+    return res.json(post);
+  } catch (error) {
+    console.error('Error updating picture post:', error);
+    return res.status(500).json({ message: 'Unable to update picture post' });
+  }
+});
+
+app.delete('/admin/picture/post/:id', async (req, res) => {
+  try {
+    const post = await pictureModel.findByIdAndDelete(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Picture post not found' });
+    return res.json({ message: 'Picture post deleted' });
+  } catch (error) {
+    console.error('Error deleting picture post:', error);
+    return res.status(500).json({ message: 'Unable to delete picture post' });
+  }
+});
+
 
 const VideoSchema = mongoose.Schema(
   {
@@ -1150,6 +1177,33 @@ app.get('/admin/video/post/:id', async (req, res) => {
     console.log('====================================');
   }
 })
+
+app.patch('/admin/video/post/:id', async (req, res) => {
+  try {
+    const { title, content, price, VidUrl } = req.body;
+    const post = await VideoModel.findByIdAndUpdate(
+      req.params.id,
+      { title, content, price, ...(VidUrl ? { VidUrl } : {}) },
+      { new: true, runValidators: true }
+    );
+    if (!post) return res.status(404).json({ message: 'Video post not found' });
+    return res.json(post);
+  } catch (error) {
+    console.error('Error updating video post:', error);
+    return res.status(500).json({ message: 'Unable to update video post' });
+  }
+});
+
+app.delete('/admin/video/post/:id', async (req, res) => {
+  try {
+    const post = await VideoModel.findByIdAndDelete(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Video post not found' });
+    return res.json({ message: 'Video post deleted' });
+  } catch (error) {
+    console.error('Error deleting video post:', error);
+    return res.status(500).json({ message: 'Unable to delete video post' });
+  }
+});
 
 
 
