@@ -96,16 +96,20 @@ router.post('/username-request', async (req, res) => {
 
 router.post('/login', async (req, res) => {
     try {
-        const username = req.body.username?.trim().toLowerCase();
-        const user = await User.findOne({ username });
+        const username = req.body.username?.trim();
+        const user = username
+            ? await User.findOne({ username: { $regex: `^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } })
+            : null;
 
         if (!username || !user) {
             return res.status(401).json({ message: 'Username not found' });
         }
 
+        const normalizedUsername = user.username.trim().toLowerCase();
+
         if (user.status === 'pending') {
             const approvedRequest = await UsernameRequest.findOne({
-                username,
+                username: normalizedUsername,
                 email: user.email,
                 status: 'approved',
             });
