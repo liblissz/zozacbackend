@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from './models/User.js';
 import authRoutes from './routes/authRoutes.js';
+import legacyAuthRoutes from './routes/legacyAuthRoutes.js';
 import Message from './AImodules/aimessages.js'
 import Conversation from "./AImodules/Conversation.js";
 import axios from 'axios'
@@ -28,6 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 app.use('/api/auth', authRoutes);
+app.use('/api', legacyAuthRoutes);
 
 const SORT_ROUNDS = 6;
 
