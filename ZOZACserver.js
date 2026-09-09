@@ -1,7 +1,9 @@
 import express from "express";
 import dotenv from 'dotenv';
 import cors from 'cors';
-import mongoose from "mongoose";
+import { connectDatabase, mongoose } from './config/database.js';
+import { createSocketServer } from './config/socket.js';
+import { createEmailApi } from './config/email.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from './models/User.js';
@@ -11,69 +13,21 @@ import Conversation from "./AImodules/Conversation.js";
 import axios from 'axios'
 
 
-import SibApiV3Sdk from 'sib-api-v3-sdk';
 import bodyParser from 'body-parser';
 
 import crypto from 'crypto';
 
-//notification
-import http from 'http';
-import { Server } from 'socket.io';
-import { type } from "os";
+dotenv.config({ path: "./config.env" });
 
-dotenv.config({path: "./config.env"});
-
-const client = SibApiV3Sdk.ApiClient.instance;
-const apiKey = client.authentications['api-key'];
-apiKey.apiKey = process.env.BREVO_API_KEY;  // Store your API key in .env securely
-
-const emailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  }
-});
-
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-});
-
-
-//my middlewares
-app.set('io', io);
+const { server } = createSocketServer(app);
+const emailApi = createEmailApi();
 
 
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 app.use('/api/auth', authRoutes);
-
-//connecting to the mongodb database
-//connection string
-const url = process.env.ALTLASURI
-
-
-const connectdatase =  async()=>{
-
-    try {
-        
-        await mongoose.connect(url)
-        console.log("database conected sucessfully");
-    } catch (error) {
-        console.log('====================================');
-        console.log(error);
-        console.log('====================================');
-    }
-}
-
-
-
 
 const SORT_ROUNDS = 6;
 
@@ -133,7 +87,7 @@ app.post('/normal/users', async (req, res) => {
     res.status(200).json({ message: 'User registered successfully', token });
 
     // Notify all admins
-    const admins = await Usermodel.find();
+    const admins = await User.find();
     const date = new Date();
 
     for (const admin of admins) {
@@ -352,7 +306,7 @@ app.post('/api/auth/request-reset-password', async (req, res) => {
   email = email.trim().toLowerCase();
 
   try {
-    const user = await Usermodel.findOne({ email });
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -421,7 +375,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    const updatedUser = await Usermodel.findOneAndUpdate(
+    const updatedUser = await User.findOneAndUpdate(
       { email: normalizedEmail },
       { password: hashedPassword },
       { new: true }
@@ -464,7 +418,7 @@ const verifyToken = (req, res, next) => {
 app.get('/api/profile', verifyToken, async (req, res) => {
   try {
     const email = req.user.email;
-    const user = await Usermodel.findOne({ email }).select('-password'); // exclude password
+    const user = await User.findOne({ username: req.user.username }).select('-password'); // exclude password
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -478,7 +432,7 @@ app.get('/api/profile', verifyToken, async (req, res) => {
 });
 app.get("/api/user/add-project/:id", async (req, res) => {
   try {
-    const user = await Usermodel.findById(req.params.id).select('projects');
+    const user = await User.findById(req.params.id).select('projects');
     res.status(200).json(user.projects); // ✅ returns just the array
   } catch (err) {
     console.error(err);
@@ -492,7 +446,7 @@ app.post('/api/user/add-project/:id', async (req, res) => {
   try {
     const { title, description, completed, GithubLink, imageUrlwork } = req.body;
 
-    const user = await Usermodel.findById(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -526,7 +480,7 @@ app.post('/api/user/add-project/:id', async (req, res) => {
 // ✅ Get all projects for a specific user
 app.get("/api/user/projects/:id", async (req, res) => {
   try {
-    const user = await Usermodel.findById(req.params.id).select('projects');
+    const user = await User.findById(req.params.id).select('projects');
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -544,11 +498,11 @@ app.get("/api/user/projects/:id", async (req, res) => {
 
 const sucbscribeSchema = new mongoose.Schema(
   {
-    email:{
+    email: {
       type: String,
       required: true
     },
-    date:{
+    date: {
       type: String,
       default: new Date()
     }
@@ -559,18 +513,18 @@ const subscribemodel = mongoose.model("subscribers", sucbscribeSchema)
 
 
 
-app.post("/subscribe", async (req,res)=>{
-   try {
-    const {email} = req.body
-    const saveuser = subscribemodel({email})
-  await  saveuser.save();
-  res.status(200).json({message: "subscriber saved "})
-   } catch (error) {
-    res.status(500).json({message: "internal server error"})
+app.post("/subscribe", async (req, res) => {
+  try {
+    const { email } = req.body
+    const saveuser = subscribemodel({ email })
+    await saveuser.save();
+    res.status(200).json({ message: "subscriber saved " })
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" })
     console.log('====================================');
     console.log(error);
     console.log('====================================');
-   }
+  }
 
 })
 
@@ -584,7 +538,7 @@ app.put('/api/user/rate-project/:userId/:projectId', async (req, res) => {
   const { rating } = req.body;
 
   try {
-    const user = await Usermodel.findById(userId);
+    const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const project = user.projects.id(projectId);
@@ -619,7 +573,7 @@ app.put('/api/user/rate-project/:userId/:projectId', async (req, res) => {
 
 app.get('/api/user/:id', async (req, res) => {
   try {
-    const user = await Usermodel.findById(req.params.id)
+    const user = await User.findById(req.params.id)
     if (!user) {
       return res.status(404).json({ message: 'Note not found' })
     }
@@ -645,7 +599,7 @@ app.put('/user/edit/:id', async (req, res) => {
       updatedFields.password = hashedPassword;
     }
 
-    const updatedUser = await Usermodel.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       updatedFields,
       { new: true }
@@ -701,31 +655,31 @@ const PictureSchema = mongoose.Schema(
 
   });
 
-  //Picture model
-  
-  const pictureModel = mongoose.model("PicturePosts", PictureSchema)
-  
-  
+//Picture model
 
-  const NotificationSchema = new mongoose.Schema({
-    type: { type: String, required: true }, // e.g. 'post', 'video', 'user'
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-    message: { type: String, required: true },
-    icon: { type: String, default: '' },
-    date: {
-      type: String,
-      default: () => new Date().toLocaleString('en-US', {
-        timeZone: 'Africa/Douala',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      })
-    }
-  });
+const pictureModel = mongoose.model("PicturePosts", PictureSchema)
+
+
+
+const NotificationSchema = new mongoose.Schema({
+  type: { type: String, required: true }, // e.g. 'post', 'video', 'user'
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  message: { type: String, required: true },
+  icon: { type: String, default: '' },
+  date: {
+    type: String,
+    default: () => new Date().toLocaleString('en-US', {
+      timeZone: 'Africa/Douala',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+});
 
 const NotificationModel = mongoose.model('Notification', NotificationSchema);
 
@@ -740,7 +694,7 @@ app.post("/admin/picture/post", async (req, res) => {
     await savePost.save();
 
     // Notify admins
-    const admins = await Usermodel.find();
+    const admins = await User.find();
 
     for (const admin of admins) {
       try {
@@ -805,9 +759,9 @@ app.post("/admin/picture/post", async (req, res) => {
       }
     }
 
-//subscribers
+    //subscribers
 
-     const subscribers = await subscribemodel.find();
+    const subscribers = await subscribemodel.find();
 
     for (const subscriber of subscribers) {
       try {
@@ -990,9 +944,9 @@ app.get("/api/notifications", async (req, res) => {
 
 app.get('/admin/picture/post', async (req, res) => {
   try {
- const allpicturepost = await pictureModel
-  .find()
-  .sort({ date: -1 });
+    const allpicturepost = await pictureModel
+      .find()
+      .sort({ date: -1 });
 
     res.status(201).json(allpicturepost)
   } catch (error) {
@@ -1038,26 +992,26 @@ const VideoSchema = mongoose.Schema(
   });
 
 
-  //Picture model
-  
-  const VideoModel = mongoose.model("VideoPosts", VideoSchema)
-  app.post("/admin/video/post", async (req, res) => {
-    try {
-      const { title, content, price, VidUrl, date } = req.body;
-  
-      const savePostvideo = new VideoModel({ title, content, price, VidUrl, date });
-      await savePostvideo.save();
-  
-      // Notify admins
-      const admins = await Usermodel.find();
-  
-      for (const admin of admins) {
-        try {
-          const sendSmtpEmail = {
-            sender: { email: 'vildashnetwork@gmail.com', name: 'ZOZAC' },
-            to: [{ email: admin.email }],
-            subject: `🚀 New Project Posted On ZOZAC: ${title}`,
-            htmlContent: `
+//Picture model
+
+const VideoModel = mongoose.model("VideoPosts", VideoSchema)
+app.post("/admin/video/post", async (req, res) => {
+  try {
+    const { title, content, price, VidUrl, date } = req.body;
+
+    const savePostvideo = new VideoModel({ title, content, price, VidUrl, date });
+    await savePostvideo.save();
+
+    // Notify admins
+    const admins = await User.find();
+
+    for (const admin of admins) {
+      try {
+        const sendSmtpEmail = {
+          sender: { email: 'vildashnetwork@gmail.com', name: 'ZOZAC' },
+          to: [{ email: admin.email }],
+          subject: `🚀 New Project Posted On ZOZAC: ${title}`,
+          htmlContent: `
               <!DOCTYPE html>
               <html lang="en">
               <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Pefscom Posts Notification</title></head>
@@ -1091,24 +1045,24 @@ const VideoSchema = mongoose.Schema(
               </body>
               </html>
             `
-          };
-          const result = await emailApi.sendTransacEmail(sendSmtpEmail);
-          console.log(`📧 Email sent to: ${admin.email} | MessageId: ${result.messageId}`);
-        } catch (emailErr) {
-          console.error(`❌ Failed to email ${admin.email}:`, emailErr.message);
-        }
+        };
+        const result = await emailApi.sendTransacEmail(sendSmtpEmail);
+        console.log(`📧 Email sent to: ${admin.email} | MessageId: ${result.messageId}`);
+      } catch (emailErr) {
+        console.error(`❌ Failed to email ${admin.email}:`, emailErr.message);
       }
-  
-      // Notify normal users
-      const users = await normalusermodel.find();
-  
-      for (const user of users) {
-        try {
-          const sendSmtpEmail = {
-            sender: { email: 'vildashnetwork@gmail.com', name: 'ZOZAC' },
-            to: [{ email: user.email }],
-            subject: `🚀 New Project Posted On ZOZAC: ${user.name}`,
-            htmlContent: `
+    }
+
+    // Notify normal users
+    const users = await normalusermodel.find();
+
+    for (const user of users) {
+      try {
+        const sendSmtpEmail = {
+          sender: { email: 'vildashnetwork@gmail.com', name: 'ZOZAC' },
+          to: [{ email: user.email }],
+          subject: `🚀 New Project Posted On ZOZAC: ${user.name}`,
+          htmlContent: `
               <!DOCTYPE html>
               <html lang="en">
               <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Pefscom Posts Notification</title></head>
@@ -1144,59 +1098,59 @@ const VideoSchema = mongoose.Schema(
               </body>
               </html>
             `
-          };
-          const result = await emailApi.sendTransacEmail(sendSmtpEmail);
-          console.log(`📧 Email sent to: ${user.email} | MessageId: ${result.messageId}`);
-        } catch (emailErr) {
-          console.error(`❌ Failed to email ${user.email}:`, emailErr.message);
-        }
+        };
+        const result = await emailApi.sendTransacEmail(sendSmtpEmail);
+        console.log(`📧 Email sent to: ${user.email} | MessageId: ${result.messageId}`);
+      } catch (emailErr) {
+        console.error(`❌ Failed to email ${user.email}:`, emailErr.message);
       }
-  
-      // Emit socket.io notification
-      const io = req.app.get('io');
-      io.emit('PushPostvideoNotification', { savePostvideo: savePostvideo.toObject() });
-      console.log('📢 Emitting new video post:', savePostvideo.title);
-  
-      res.status(200).json({ message: "post made successfully" });
-    } catch (error) {
-      console.error('Error in /admin/video/post:', error);
-      res.status(500).json({ message: "internal server error" });
     }
-  });
+
+    // Emit socket.io notification
+    const io = req.app.get('io');
+    io.emit('PushPostvideoNotification', { savePostvideo: savePostvideo.toObject() });
+    console.log('📢 Emitting new video post:', savePostvideo.title);
+
+    res.status(200).json({ message: "post made successfully" });
+  } catch (error) {
+    console.error('Error in /admin/video/post:', error);
+    res.status(500).json({ message: "internal server error" });
+  }
+});
 
 
 
 
 
-  
-  app.get('/admin/video/post', async (req, res) => {
-    try {
-      const allvideopost = await VideoModel.find().sort({ date: -1 });
-      res.status(201).json(allvideopost)
-    } catch (error) {
-      res.status(500).json({ message: "internal server error" })
-      console.log('====================================');
-      console.log(error);
-      console.log('====================================');
-    }
-  })
-  
-  
-  app.get('/admin/video/post/:id', async (req, res) => {
-  
-    try {
-      const videopost = await VideoModel.findById(req.params.id)
-      res.status(200).json(videopost)
-    } catch (error) {
-      res.status(500).json({ message: "internal server error" })
-      console.log('====================================');
-      console.log(err);
-      console.log('====================================');
-    }
-  })
-  
 
-  
+app.get('/admin/video/post', async (req, res) => {
+  try {
+    const allvideopost = await VideoModel.find().sort({ date: -1 });
+    res.status(201).json(allvideopost)
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" })
+    console.log('====================================');
+    console.log(error);
+    console.log('====================================');
+  }
+})
+
+
+app.get('/admin/video/post/:id', async (req, res) => {
+
+  try {
+    const videopost = await VideoModel.findById(req.params.id)
+    res.status(200).json(videopost)
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" })
+    console.log('====================================');
+    console.log(err);
+    console.log('====================================');
+  }
+})
+
+
+
 
 app.get('/api/notifications', async (req, res) => {
   try {
@@ -1261,7 +1215,7 @@ app.post("/api/company/project/post", async (req, res) => {
 
     await savecomapnyproject.save();
 
-    const admins = await Usermodel.find();
+    const admins = await User.find();
 
     for (const admin of admins) {
       try {
@@ -1500,17 +1454,17 @@ const Ordermodel = new mongoose.model("OrderModel", orderschema)
 app.post("/api/post/orders", async (req, res) => {
 
   try {
-    const {name, email,phonenumber, whatsappnumber, details, want , gettous} = req.body
-    const saveorders = Ordermodel({name, email,phonenumber, whatsappnumber, details, want , gettous})
+    const { name, email, phonenumber, whatsappnumber, details, want, gettous } = req.body
+    const saveorders = Ordermodel({ name, email, phonenumber, whatsappnumber, details, want, gettous })
     await saveorders.save()
-    res.status(200).json({message: "data saved sucessfull"})
+    res.status(200).json({ message: "data saved sucessfull" })
 
 
 
 
 
 
-const admins = await Usermodel.find();
+    const admins = await User.find();
 
     for (const admin of admins) {
       try {
@@ -1642,31 +1596,31 @@ const admins = await Usermodel.find();
 
 
   } catch (error) {
-   res.status(500).json({message: "internal server error"})
-   console.log('====================================');
-   console.log(error);
-   console.log('====================================');
+    res.status(500).json({ message: "internal server error" })
+    console.log('====================================');
+    console.log(error);
+    console.log('====================================');
   }
 })
 
 
 
-app.get('/get/orders', async (req,res)=>{
- try {
-  const allorders = await Ordermodel.find().sort({date: -1})
-  res.status(201).json(allorders)
- } catch (error) {
-  res.status(500).json({message: "internal server error"})
-  console.log('====================================');
-  console.log(error);
-  console.log('====================================');
- }
+app.get('/get/orders', async (req, res) => {
+  try {
+    const allorders = await Ordermodel.find().sort({ date: -1 })
+    res.status(201).json(allorders)
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" })
+    console.log('====================================');
+    console.log(error);
+    console.log('====================================');
+  }
 
 })
 
 const pageViewSchema = new mongoose.Schema({
   count: { type: Number, default: 0 },
-  date: {type: Date, default: Date.now}
+  date: { type: Date, default: Date.now }
 });
 
 const PageView = mongoose.model('PageView', pageViewSchema);
@@ -1720,7 +1674,7 @@ async function getAIResponse({ userMessage, conversationId }) {
 
 
 
- const lowerMsg = userMessage.toLowerCase();
+  const lowerMsg = userMessage.toLowerCase();
 
   // 1️⃣ Build projectContext
   let projectContext = "";
@@ -1729,7 +1683,7 @@ async function getAIResponse({ userMessage, conversationId }) {
     const detailedProjects = projects.map(p => `
 - **Title:** ${p.title}
 - **Category:** ${p.category}
-- **Dates:** ${p.startDate?.toISOString().slice(0,10) || 'N/A'} → ${p.endDate?.toISOString().slice(0,10) || 'N/A'}
+- **Dates:** ${p.startDate?.toISOString().slice(0, 10) || 'N/A'} → ${p.endDate?.toISOString().slice(0, 10) || 'N/A'}
 - **Expected Duration:** ${p.expectedCompletionTime || 'N/A'} days
 - **Budget:** ${p.budget?.toLocaleString() || 'N/A'} XAF
 - **Impact:** ${p.impact}
@@ -1739,7 +1693,7 @@ async function getAIResponse({ userMessage, conversationId }) {
 
     // summary stats
     const totalProjects = projects.length;
-    const avgBudget = (projects.reduce((sum,p) => sum + (p.budget||0), 0) / (totalProjects||1)).toFixed(2);
+    const avgBudget = (projects.reduce((sum, p) => sum + (p.budget || 0), 0) / (totalProjects || 1)).toFixed(2);
     const completedCount = projects.filter(p => p.isCompleted).length;
     const inProgressCount = totalProjects - completedCount;
 
@@ -1752,7 +1706,7 @@ async function getAIResponse({ userMessage, conversationId }) {
 
 ${detailedProjects}
 `;
-  } catch(err) {
+  } catch (err) {
     console.error("Project Fetch Error:", err);
     projectContext = "⚠️ Unable to fetch project data right now.";
   }
@@ -1769,7 +1723,7 @@ ${detailedProjects}
 - **Image:** <img src="${pic.ImageUrl}" alt="${pic.title}" style="max-width:100%;height:auto;" />
 -----------------------------`).join("\n");
 
-    const totalRevenue = pics.reduce((sum,p) => sum + parseFloat(p.price||0), 0).toFixed(2);
+    const totalRevenue = pics.reduce((sum, p) => sum + parseFloat(p.price || 0), 0).toFixed(2);
 
     pictureContext = `
 🖼️ Picture Posts:
@@ -1777,7 +1731,7 @@ ${detailedProjects}
 
 ${detailedPics}
 `;
-  } catch(err) {
+  } catch (err) {
     console.error("Picture Fetch Error:", err);
     pictureContext = "⚠️ Unable to fetch picture-post data right now.";
   }
@@ -1798,7 +1752,7 @@ ${detailedPics}
 
 
 
-    let ordersContext = "";
+  let ordersContext = "";
   try {
     const orders = await Ordermodel.find().lean();
     const detailedOrders = orders.map(o => `
@@ -1820,23 +1774,23 @@ ${detailedPics}
 
 ${detailedOrders}
 `;
-  } catch(err) {
+  } catch (err) {
     console.error("Order Fetch Error:", err);
     ordersContext = "⚠️ Unable to fetch order data right now.";
   }
 
 
-   // 4️⃣ Build adminContext
+  // 4️⃣ Build adminContext
   let adminContext = "";
   try {
-    const admins = await Usermodel.find().populate('projects.userId', 'username').lean();
+    const admins = await User.find().populate('projects.userId', 'username').lean();
     const detailedAdmins = admins.map(a => {
       const projList = a.projects.map(pr => `
     • **${pr.title}** (${pr.completed ? 'Done' : 'Pending'})  
       • GitHub: ${pr.GithubLink || '–'}  
       • Image: ${pr.imageUrlwork || '–'}  
       • Ratings: ${pr.ratings.map(r => r.value).join(', ') || 'None'}  
-      • Date: ${new Date(pr.date).toISOString().slice(0,10)}
+      • Date: ${new Date(pr.date).toISOString().slice(0, 10)}
     `).join('\n');
       return `
 - **Admin:** ${a.username} (${a.email})
@@ -1853,52 +1807,79 @@ ${projList || '    (No projects)'}
 
 ${detailedAdmins}
 `;
-  } catch(err) {
+  } catch (err) {
     console.error("Admin Fetch Error:", err);
     adminContext = "⚠️ Unable to fetch admin data right now.";
   }
 
-async function searchImageOnGoogle(query) {
-  const API_KEY = process.env.GOOGLE_API_KEY;
-  const CX = process.env.GOOGLE_CSE_ID;
+  async function searchImageOnGoogle(query) {
+    const API_KEY = process.env.GOOGLE_API_KEY;
+    const CX = process.env.GOOGLE_CSE_ID;
 
-  try {
-    const response = await axios.get("https://www.googleapis.com/customsearch/v1", {
-      params: {
-        key: API_KEY,
-        cx: CX,
-        q: query,
-        searchType: "image",
-        num: 1,
-        safe: "medium",
-      },
-    });
+    try {
+      const response = await axios.get("https://www.googleapis.com/customsearch/v1", {
+        params: {
+          key: API_KEY,
+          cx: CX,
+          q: query,
+          searchType: "image",
+          num: 1,
+          safe: "medium",
+        },
+      });
 
-    const items = response.data.items;
-    if (items && items.length > 0) {
-      // Return first image URL
-      return items[0].link;
-    } else {
+      const items = response.data.items;
+      if (items && items.length > 0) {
+        // Return first image URL
+        return items[0].link;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error("Google Image Search Error:", error.message);
       return null;
     }
-  } catch (error) {
-    console.error("Google Image Search Error:", error.message);
-    return null;
   }
-}
 
-// Detect if user wants an image
-const wantsImage = 
-  userMessage.toLowerCase().includes("generate an image") ||
-  userMessage.toLowerCase().includes("show me an image") ||
-  userMessage.toLowerCase().includes("image of") ||
-  userMessage.toLowerCase().startsWith("image ");
+  // Detect if user wants an image
+  const wantsImage =
+    userMessage.toLowerCase().includes("generate an image") ||
+    userMessage.toLowerCase().includes("show me an image") ||
+    userMessage.toLowerCase().includes("image of") ||
+    userMessage.toLowerCase().startsWith("image ");
 
-if (wantsImage) {
-  let imageQuery = userMessage.replace(/(generate an image of|show me an image of|image of|image )/gi, "").trim();
+  if (wantsImage) {
+    let imageQuery = userMessage.replace(/(generate an image of|show me an image of|image of|image )/gi, "").trim();
 
-  // Special case for BTC Pharmacy
-  if (imageQuery.toLowerCase().includes("btc pharmacy")) {
+    // Special case for BTC Pharmacy
+    if (imageQuery.toLowerCase().includes("btc pharmacy")) {
+      const imageUrl = await searchImageOnGoogle("BTC PHARMACY");
+      if (imageUrl) {
+        return `<img src="${imageUrl}" alt="BTC PHARMACY" style="max-width: 100%; height: auto;" />`;
+      } else {
+        return "⚠️ Sorry, no suitable image found for BTC PHARMACY.";
+      }
+    }
+
+    if (!imageQuery) {
+      imageQuery = userMessage; // fallback
+    }
+
+    const imageUrl = await searchImageOnUnsplash(imageQuery);
+
+    if (imageUrl) {
+      return `<img src="${imageUrl}" alt="${imageQuery}" style="max-width: 100%; height: auto;" />`;
+    } else {
+      return "⚠️ Sorry, no suitable image found.";
+    }
+  }
+
+  if (
+    userMessage.toLowerCase().includes("btc pharmacy") &&
+    (userMessage.toLowerCase().includes("image") ||
+      userMessage.toLowerCase().includes("show me") ||
+      userMessage.toLowerCase().includes("generate"))
+  ) {
     const imageUrl = await searchImageOnGoogle("BTC PHARMACY");
     if (imageUrl) {
       return `<img src="${imageUrl}" alt="BTC PHARMACY" style="max-width: 100%; height: auto;" />`;
@@ -1907,70 +1888,43 @@ if (wantsImage) {
     }
   }
 
-  if (!imageQuery) {
-    imageQuery = userMessage; // fallback
-  }
+  async function searchImageOnUnsplash(query) {
+    const ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "PbFWBfo9nPto__QPiEJ84ALs8asqr-kmEVr3H3TkKss";
 
-  const imageUrl = await searchImageOnUnsplash(imageQuery);
+    try {
+      console.log(`Searching Unsplash for: "${query}"`);
+      const response = await axios.get('https://api.unsplash.com/search/photos', {
+        params: {
+          query,
+          per_page: 1,
+          orientation: 'landscape',
+        },
+        headers: {
+          Authorization: `Client-ID ${ACCESS_KEY}`,
+        },
+      });
 
-  if (imageUrl) {
-    return `<img src="${imageUrl}" alt="${imageQuery}" style="max-width: 100%; height: auto;" />`;
-  } else {
-    return "⚠️ Sorry, no suitable image found.";
-  }
-}
-
-if (
-  userMessage.toLowerCase().includes("btc pharmacy") &&
-  (userMessage.toLowerCase().includes("image") ||
-    userMessage.toLowerCase().includes("show me") ||
-    userMessage.toLowerCase().includes("generate"))
-) {
-  const imageUrl = await searchImageOnGoogle("BTC PHARMACY");
-  if (imageUrl) {
-    return `<img src="${imageUrl}" alt="BTC PHARMACY" style="max-width: 100%; height: auto;" />`;
-  } else {
-    return "⚠️ Sorry, no suitable image found for BTC PHARMACY.";
-  }
-}
-
-async function searchImageOnUnsplash(query) {
-  const ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "PbFWBfo9nPto__QPiEJ84ALs8asqr-kmEVr3H3TkKss";
-
-  try {
-    console.log(`Searching Unsplash for: "${query}"`);
-    const response = await axios.get('https://api.unsplash.com/search/photos', {
-      params: {
-        query,
-        per_page: 1,
-        orientation: 'landscape',
-      },
-      headers: {
-        Authorization: `Client-ID ${ACCESS_KEY}`,
-      },
-    });
-
-    console.log("Unsplash API response status:", response.status);
-    const results = response.data.results;
-    if (results.length > 0) {
-      console.log("Unsplash found image:", results[0].urls.regular);
-      return results[0].urls.regular;
-    } else {
-      console.log("No images found on Unsplash for query:", query);
+      console.log("Unsplash API response status:", response.status);
+      const results = response.data.results;
+      if (results.length > 0) {
+        console.log("Unsplash found image:", results[0].urls.regular);
+        return results[0].urls.regular;
+      } else {
+        console.log("No images found on Unsplash for query:", query);
+        return null;
+      }
+    } catch (error) {
+      console.error('Unsplash API error:', error.message);
       return null;
     }
-  } catch (error) {
-    console.error('Unsplash API error:', error.message);
-    return null;
   }
-}
 
 
 
 
-const systemMessage = {
-  role: "system",
-  content: `
+  const systemMessage = {
+    role: "system",
+    content: `
 You are "Afuh Alfred's AI," a multitasking assistant (personal assistant, drug expert, general expert).
 You were created by Che Fortune Orsa, an aspiring software engineer skilled in developing software applications.
 
@@ -2071,11 +2025,11 @@ You respond with:
 Keep your language concise, formal, and informative. Avoid verbosity and repetition.
 
 `
-};
-// AIzaSyAJy2Mx85_uZ8EkRbhbwsMpZvvmHMpus2M
-// {/* <script async src="https://cse.google.com/cse.js?cx=e1ebd0e638f1b4e49">
-// </script>
-// <div class="gcse-search"></div> */}
+  };
+  // AIzaSyAJy2Mx85_uZ8EkRbhbwsMpZvvmHMpus2M
+  // {/* <script async src="https://cse.google.com/cse.js?cx=e1ebd0e638f1b4e49">
+  // </script>
+  // <div class="gcse-search"></div> */}
 
 
 
@@ -2192,10 +2146,10 @@ app.delete("/conversations", async (req, res) => {
 
 
 
-connectdatase().then(()=>{
-   server.listen(8000, () => {
-      console.log("🚀 Server + Socket.IO listening at http://localhost:8000");
-    });
+connectDatabase().then(() => {
+  server.listen(8000, () => {
+    console.log("🚀 Server + Socket.IO listening at http://localhost:8000");
+  });
 })
 
 

@@ -9,13 +9,14 @@ const SALT_ROUNDS = 10;
 
 const publicUser = (user) => ({
     id: user._id,
+    _id: user._id,
     username: user.username,
     email: user.email,
     about: user.about,
     number: user.number,
     profileImage: user.profileImage,
     status: user.status || 'approved',
-    role: user.role || 'member',
+    role: user.role || 'admin',
 });
 
 router.post('/register', async (req, res) => {
@@ -79,7 +80,7 @@ router.post('/login', async (req, res) => {
             return res.status(403).json({ message: 'Your registration was not approved' });
         }
 
-        const token = jwt.sign({ id: user._id, username: user.username, role: user.role || 'member' }, JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: user._id, username: user.username, role: user.role || 'admin' }, JWT_SECRET, { expiresIn: '1d' });
         return res.json({ message: 'Login successful', token, user: publicUser(user) });
     } catch (error) {
         console.error('Login error:', error);
